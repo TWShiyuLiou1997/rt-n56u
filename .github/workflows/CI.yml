@@ -46,19 +46,27 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled == 'yes' }}
         with:
           limit-access-to-actor: true
-      - name: Start build (Fixed)
+      - name: Start build (Final Fix)
         run: |
           cd trunk
           
           # ==========================================================
-          # 💥 最終關鍵修復：手動強制複製核心配置檔
-          # 使用您提供的精確路徑 (trunk/configs/boards/K2P/kernel-3.4.x-5.0.config)
-          # 解決 CI 環境中 make silentoldconfig 步驟的 (NEW) aborted! 錯誤。
+          # 💥 最終解決方案：強制複製配置檔並手動執行配置更新
+          # 目的：解決 CI 環境中 make silentoldconfig 步驟的 (NEW) aborted! 錯誤。
           # ----------------------------------------------------------
+          # 1. 強制複製您修改過的配置檔到核心目錄
           cp configs/boards/K2P/kernel-3.4.x-5.0.config linux-3.4.x/.config
-          # ==========================================================
           
-          # 🚨 關鍵修復：手動執行徹底清理，確保清除 xtables 舊緩存 (解決 libxt_limit.so 缺失)
+          # 2. 進入核心目錄
+          cd linux-3.4.x
+          
+          # 3. 手動運行 make silentoldconfig，處理所有配置差異
+          make silentoldconfig
+          
+          # 4. 回到 trunk 目錄
+          cd ..
+          
+          # 5. 執行清理和編譯
           rm -rf tmp staging
           
           mkdir -p ${images_dir}
