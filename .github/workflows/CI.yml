@@ -46,22 +46,21 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled == 'yes' }}
         with:
           limit-access-to-actor: true
-      - name: Start build (Final Fix)
+      - name: Start build (Final Robust Fix)
         run: |
           cd trunk
           
           # ==========================================================
-          # 💥 最終解決方案：強制複製配置檔並手動執行配置更新
-          # 目的：解決 CI 環境中 make silentoldconfig 步驟的 (NEW) aborted! 錯誤。
-          # ----------------------------------------------------------
-          # 1. 強制複製您修改過的配置檔到核心目錄
+          # 💥 最終修復：強制複製配置檔並非互動式更新
+          # 1. 複製配置檔到核心編譯系統期望的位置
           cp configs/boards/K2P/kernel-3.4.x-5.0.config linux-3.4.x/.config
           
           # 2. 進入核心目錄
           cd linux-3.4.x
           
-          # 3. 手動運行 make silentoldconfig，處理所有配置差異
-          make silentoldconfig
+          # 3. 使用 'yes "" | make oldconfig' 確保所有 NEW 選項都被非互動式地接受預設值。
+          #    這將強制 CI 流程通過配置階段。
+          yes "" | make oldconfig
           
           # 4. 回到 trunk 目錄
           cd ..
