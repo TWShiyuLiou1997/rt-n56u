@@ -33,8 +33,8 @@ jobs:
       - name: Prepare environment
         run: |
           sudo apt update
-          # 🚨 關鍵修復: 確保安裝了所有 Autotools 依賴，以解決 ipset 的 libtoolize 錯誤
-          sudo apt install autoconf automake libtool pkg-config libtool-bin gperf python3-docutils autopoint gettext
+          # 🚨 關鍵修復: 新增 libltdl-dev 解決 ipset/libtoolize 的 ltdl.m4 缺失錯誤
+          sudo apt install autoconf automake libtool pkg-config libtool-bin libltdl-dev gperf python3-docutils autopoint gettext
       - name: Run shellcheck
         run: sh ./trunk/tools/shellcheck.sh
       - name: Prepare toolchain
@@ -50,7 +50,7 @@ jobs:
         run: |
           cd trunk
           
-          # 🚨 關鍵修復：手動執行徹底清理，解決 xtables 目錄為空的問題
+          # 🚨 關鍵修復：手動執行徹底清理，確保清除 xtables 舊緩存 (解決 libxt_limit.so 缺失)
           rm -rf tmp staging
           
           mkdir -p ${images_dir}
