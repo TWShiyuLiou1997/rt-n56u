@@ -49,13 +49,13 @@ jobs:
         run: |
           cd trunk
           
-          # ⚠️ 關鍵修復 1: 設置 .config 文件，這是 make dirclean 所需的
-          cp configs/${targets}.config .config 
+          # ⚠️ 路徑修正：設定檔位於 templates 子目錄中
+          cp configs/templates/${targets}.config .config 
           
-          # 🚨 關鍵修復 2: 運行徹底清理，解決 xtables 目錄為空的問題
+          # 🚨 關鍵修復：強制執行徹底清理，解決 xtables 目錄為空的問題
           make dirclean
           
-          # 3. 清理臨時的 .config 文件，交由 build_firmware_ci 重新創建
+          # 清理臨時的 .config 文件，交由 build_firmware_ci 重新創建
           rm -f .config
           
           mkdir -p ${images_dir}
