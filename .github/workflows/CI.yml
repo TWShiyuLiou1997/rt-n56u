@@ -45,7 +45,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled == 'yes' }}
         with:
           limit-access-to-actor: true
-      - name: Start build (Fixed: Added make dirclean)
+      - name: Start build (Fixed)
         run: |
           cd trunk
           # 🚨 關鍵修復：強制執行徹底清理，確保清除所有舊的 iptables 編譯緩存
