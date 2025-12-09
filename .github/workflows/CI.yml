@@ -30,7 +30,7 @@ jobs:
             targets: "K2P"
     steps:
       - uses: actions/checkout@v2
-      - name: Prepare environment (Fixed: Added full Autotools)
+      - name: Prepare environment
         run: |
           sudo apt update
           # 🚨 關鍵修復: 確保安裝了所有 Autotools 依賴，以解決 ipset 的 libtoolize 錯誤
