@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       debug_enabled:
-        description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'     
+        description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'      
         required: false
         default: 'no'
   release:
@@ -49,6 +49,14 @@ jobs:
       - name: Start build (Fixed)
         run: |
           cd trunk
+          
+          # ==========================================================
+          # 💥 最終關鍵修復：手動強制複製核心配置檔
+          # 確保您在 'kernel-3.4.x-5.0.config' 中的修改 (所有 =m 設置) 
+          # 在編譯開始前被核心讀取。
+          # ----------------------------------------------------------
+          cp ../kernel-3.4.x-5.0.config linux-3.4.x/.config
+          # ==========================================================
           
           # 🚨 關鍵修復：手動執行徹底清理，確保清除 xtables 舊緩存 (解決 libxt_limit.so 缺失)
           rm -rf tmp staging
