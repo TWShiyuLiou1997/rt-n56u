@@ -46,12 +46,12 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled == 'yes' }}
         with:
           limit-access-to-actor: true
-      - name: Start build (Final Robust Fix)
+      - name: Start build (Ultimate Fix)
         run: |
           cd trunk
           
           # ==========================================================
-          # 💥 最終解決方案：強制複製、驗證並非互動式更新
+          # 💥 最終解決方案：強制複製配置檔、驗證並非互動式更新
           # ----------------------------------------------------------
           # 1. 複製您修改過的配置檔到核心目錄
           cp configs/boards/K2P/kernel-3.4.x-5.0.config linux-3.4.x/.config
@@ -62,10 +62,10 @@ jobs:
           echo "------------------------------------------------"
           
           # 2. **最關鍵修正**：使用 'yes "" | make oldconfig' 徹底解決 CI 中斷問題。
-          #    'make -C linux-3.4.x' 會在該目錄下執行命令。
-          yes "" | make -C linux-3.4.x oldconfig
+          #    這將強制所有 NEW 選項接受預設值。
+          yes "" | make -C linux-3.4.x oldconfig 
           
-          # 3. 執行清理和編譯
+          # 3. 執行清理和編譯 (build_firmware_ci 會開始編譯)
           rm -rf tmp staging
           
           mkdir -p ${images_dir}
