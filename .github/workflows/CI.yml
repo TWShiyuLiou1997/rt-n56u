@@ -30,10 +30,11 @@ jobs:
             targets: "K2P"
     steps:
       - uses: actions/checkout@v2
-      - name: Prepare environment
+      - name: Prepare environment (Fixed: Added full Autotools)
         run: |
           sudo apt update
-          sudo apt install libtool-bin gperf python3-docutils autopoint gettext
+          # 🚨 關鍵修復: 確保安裝了所有 Autotools 依賴，以解決 ipset 的 libtoolize 錯誤
+          sudo apt install autoconf automake libtool pkg-config libtool-bin gperf python3-docutils autopoint gettext
       - name: Run shellcheck
         run: sh ./trunk/tools/shellcheck.sh
       - name: Prepare toolchain
@@ -49,7 +50,7 @@ jobs:
         run: |
           cd trunk
           
-          # 🚨 關鍵修復：手動執行徹底清理，繞過 Makefile 的 dirclean 規則缺失問題
+          # 🚨 關鍵修復：手動執行徹底清理，解決 xtables 目錄為空的問題
           rm -rf tmp staging
           
           mkdir -p ${images_dir}
