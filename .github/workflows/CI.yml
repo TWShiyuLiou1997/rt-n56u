@@ -45,7 +45,7 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled == 'yes' }}
         with:
           limit-access-to-actor: true
-      - name: Start build (Fixed: Added .config prep for dirclean)
+      - name: Start build (Fixed)
         run: |
           cd trunk
           
