@@ -45,11 +45,19 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled == 'yes' }}
         with:
           limit-access-to-actor: true
-      - name: Start build (Fixed)
+      - name: Start build (Fixed: Added .config prep for dirclean)
         run: |
           cd trunk
-          # 🚨 關鍵修復：強制執行徹底清理，確保清除所有舊的 iptables 編譯緩存
+          
+          # ⚠️ 關鍵修復 1: 設置 .config 文件，這是 make dirclean 所需的
+          cp configs/${targets}.config .config 
+          
+          # 🚨 關鍵修復 2: 運行徹底清理，解決 xtables 目錄為空的問題
           make dirclean
+          
+          # 3. 清理臨時的 .config 文件，交由 build_firmware_ci 重新創建
+          rm -f .config
+          
           mkdir -p ${images_dir}
           for m in $targets; do fakeroot ./build_firmware_ci $m; \
           if [ $? = 0 ]; then cp -f images/*.trx ${images_dir}/$m.trx; else exit 1; fi; \
@@ -64,7 +72,6 @@ jobs:
           echo "image_name=${image_name}" >> $GITHUB_ENV
       - name: Upload images to Artifact
         if: ${{ github.event_name != 'release' && success() }}
-        # ⚠️ 修復: 升級到 v4 版本以符合 GitHub 政策
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.image_name }}
