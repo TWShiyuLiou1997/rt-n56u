@@ -49,14 +49,8 @@ jobs:
         run: |
           cd trunk
           
-          # ⚠️ 路徑修正：設定檔位於 templates 子目錄中
-          cp configs/templates/${targets}.config .config 
-          
-          # 🚨 關鍵修復：強制執行徹底清理，解決 xtables 目錄為空的問題
-          make dirclean
-          
-          # 清理臨時的 .config 文件，交由 build_firmware_ci 重新創建
-          rm -f .config
+          # 🚨 關鍵修復：手動執行徹底清理，繞過 Makefile 的 dirclean 規則缺失問題
+          rm -rf tmp staging
           
           mkdir -p ${images_dir}
           for m in $targets; do fakeroot ./build_firmware_ci $m; \
