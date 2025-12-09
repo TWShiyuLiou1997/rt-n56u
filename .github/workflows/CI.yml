@@ -51,15 +51,21 @@ jobs:
           cd trunk
           
           # ==========================================================
-          # 💥 最終修復：強制複製配置檔並非互動式更新
-          # 1. 複製配置檔到核心編譯系統期望的位置
+          # 💥 最終解決方案：強制複製配置檔、驗證並非互動式更新
+          # ----------------------------------------------------------
+          # 1. 複製您修改過的配置檔到核心目錄
           cp configs/boards/K2P/kernel-3.4.x-5.0.config linux-3.4.x/.config
           
           # 2. 進入核心目錄
           cd linux-3.4.x
           
+          # 🚨 驗證步驟：檢查配置檔內容是否正確（這會在日誌中輸出）
+          echo "--- Verifying .config content ---"
+          grep 'CONFIG_NETFILTER_XT_MATCH_CONNLIMIT' .config
+          echo "---------------------------------"
+          
           # 3. 使用 'yes "" | make oldconfig' 確保所有 NEW 選項都被非互動式地接受預設值。
-          #    這將強制 CI 流程通過配置階段。
+          #    這將強制 CI 流程通過配置階段，解決 [N/y/?] (NEW) aborted! 錯誤。
           yes "" | make oldconfig
           
           # 4. 回到 trunk 目錄
