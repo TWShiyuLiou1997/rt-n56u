@@ -31,6 +31,7 @@ jobs:
       - name: Prepare environment
         run: |
           sudo apt update
+          # 🚨 關鍵修復: 新增 libltdl-dev 解決 ipset/libtoolize 的 ltdl.m4 缺失錯誤
           sudo apt install autoconf automake libtool pkg-config libtool-bin libltdl-dev gperf python3-docutils autopoint gettext
       - name: Run shellcheck
         run: sh ./trunk/tools/shellcheck.sh
@@ -43,23 +44,22 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled == 'yes' }}
         with:
           limit-access-to-actor: true
-      - name: Start build (Ultimate Override Fix)
+      - name: Start build (Ultimate Fix: olddefconfig)
         run: |
           cd trunk
           
           # ==========================================================
-          # 💥 最終修復：解決核心配置 aborted! 報錯
+          # 💥 最終解決方案：強制複製、使用 olddefconfig 更新配置
           # ----------------------------------------------------------
-          # 1. 強制將您修改的配置檔複製到核心目錄（確保 =m 被讀取）
+          # 1. 複製您修改過的配置檔到核心目錄
           cp configs/boards/K2P/kernel-3.4.x-5.0.config linux-3.4.x/.config
           
-          # 2. 強制核心編譯器採用該配置檔，不進行交互式提問
-          # 使用 oldconfig 的非互動模式解決 NEW 選項問題
-          yes "" | make -C linux-3.4.x oldconfig
+          # 2. **最關鍵修正**：使用 make olddefconfig 確保所有 NEW 選項都被強制採用預設值。
+          #    這個命令被設計為非互動式，應該能解決所有 [N/y/?] (NEW) aborted! 錯誤。
+          make -C linux-3.4.x olddefconfig
           
-          # 3. 執行清理
+          # 3. 執行清理和編譯 (build_firmware_ci 會開始編譯)
           rm -rf tmp staging
-          # ==========================================================
           
           mkdir -p ${images_dir}
           for m in $targets; do fakeroot ./build_firmware_ci $m; \
