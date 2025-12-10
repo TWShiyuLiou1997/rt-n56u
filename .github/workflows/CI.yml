@@ -1,19 +1,17 @@
 name: CI
 
-# Controls when the action will run. 
 on: 
   push:
   pull_request:
   workflow_dispatch:
     inputs:
       debug_enabled:
-        description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'      
+        description: 'Run with tmate debugging enabled'      
         required: false
         default: 'no'
   release:
     types: [published]
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   build:
     name: build
@@ -33,7 +31,6 @@ jobs:
       - name: Prepare environment
         run: |
           sudo apt update
-          # 🚨 關鍵修復: 新增 libltdl-dev 解決 ipset/libtoolize 的 ltdl.m4 缺失錯誤
           sudo apt install autoconf automake libtool pkg-config libtool-bin libltdl-dev gperf python3-docutils autopoint gettext
       - name: Run shellcheck
         run: sh ./trunk/tools/shellcheck.sh
@@ -46,27 +43,23 @@ jobs:
         if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled == 'yes' }}
         with:
           limit-access-to-actor: true
-      - name: Start build (Ultimate Fix)
+      - name: Start build (Ultimate Override Fix)
         run: |
           cd trunk
           
           # ==========================================================
-          # 💥 最終解決方案：強制複製配置檔、驗證並非互動式更新
+          # 💥 最終修復：解決核心配置 aborted! 報錯
           # ----------------------------------------------------------
-          # 1. 複製您修改過的配置檔到核心目錄
+          # 1. 強制將您修改的配置檔複製到核心目錄（確保 =m 被讀取）
           cp configs/boards/K2P/kernel-3.4.x-5.0.config linux-3.4.x/.config
           
-          # 🚨 驗證步驟：檢查配置檔內容是否正確
-          echo "--- Verifying .config content (must show =m) ---"
-          grep 'CONFIG_NETFILTER_XT_MATCH_CONNLIMIT' linux-3.4.x/.config
-          echo "------------------------------------------------"
+          # 2. 強制核心編譯器採用該配置檔，不進行交互式提問
+          # 使用 oldconfig 的非互動模式解決 NEW 選項問題
+          yes "" | make -C linux-3.4.x oldconfig
           
-          # 2. **最關鍵修正**：使用 'yes "" | make oldconfig' 徹底解決 CI 中斷問題。
-          #    這將強制所有 NEW 選項接受預設值。
-          yes "" | make -C linux-3.4.x oldconfig 
-          
-          # 3. 執行清理和編譯 (build_firmware_ci 會開始編譯)
+          # 3. 執行清理
           rm -rf tmp staging
+          # ==========================================================
           
           mkdir -p ${images_dir}
           for m in $targets; do fakeroot ./build_firmware_ci $m; \
