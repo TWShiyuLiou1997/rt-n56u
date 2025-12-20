@@ -1,90 +1,305 @@
-name: CI
+name: Padavan-CI-Universal-Final
 
-on: 
-  push:
-  pull_request:
+# ==============================================================================
+# 1. 互動式選單：支援多機型、JSON 客製化、指定工具鏈
+# ==============================================================================
+on:
   workflow_dispatch:
     inputs:
-      debug_enabled:
-        description: 'Run with tmate debugging enabled'      
-        required: false
-        default: 'no'
+      target_select:
+        description: "選擇機型 (Target Model)"
+        required: true
+        type: choice
+        options:
+          - K2P
+          - K2P-NANO
+          - K2P-USB
+          - 360P2
+          - 5K-W20
+          - A3004NS
+          - B70
+          - CR660x
+          - DIR-878
+          - DIR-882
+          - E8820V2
+          - HC5661A
+          - HC5761A
+          - HC5861B
+          - JCG-836PRO
+          - JCG-AC860M
+          - JCG-Q20
+          - JCG-Y2
+          - MI-3
+          - MI-3C
+          - MI-4
+          - MI-MINI
+          - MI-NANO
+          - MI-R3G
+          - MI-R3P
+          - MI-R3P-breed
+          - MI-R4A
+          - MR2600
+          - MSG1500
+          - MZ-R13
+          - MZ-R13P
+          - NETGEAR-BZV
+          - NETGEAR-CHJ
+          - NEWIFI-MINI
+          - NEWIFI3
+          - OYE-001
+          - PSG1208
+          - PSG1218
+          - PSG1218_nano
+          - R2100
+          - R6220
+          - RM2100
+          - RT-AC1200GU
+          - WDR7300
+          - WR1200JS
+          - XY-C1
+          - ZTE_E8820S
+        default: K2P
+
+      nanoversion:
+        description: "開啟極限瘦身 (Nano Optimization)"
+        type: boolean
+        default: false
+        
+      customization:
+        description: '自定義配置 JSON (Wi-Fi/密碼/IP)'
+        required: true
+        type: string
+        default: '{"lanip":"192.168.1.1","signaccount":"admin","signpassword":"admin","wifi2gssid":"Padavan","wifi2gpsk":"1234567890","wifi5gssid":"Padavan-5G","wifi5gpsk":"1234567890"}'
+        
+      toolchain_select:
+        description: "編譯工具鏈 (Toolchain Selection)"
+        required: true
+        type: choice
+        options:
+          # 原生腳本方式
+          - Native (Script 1 Default:dl_toolchain.sh)
+          # 新增的 hanwckf 版本
+          - hanwckf v1.1 (gcc 7.4.0, uclibc 1.0.32, SO_REUSEPORT)
+          - hanwckf v1.0 (gcc 7.4.0, uclibc 1.0.32)
+        default: Native (Script 1 Default:dl_toolchain.sh)
+
   release:
     types: [published]
 
 jobs:
   build:
-    name: build
-    runs-on: ubuntu-latest
-    if: ${{ !(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) }}
+    name: Build Firmware
+    runs-on: ubuntu-22.04
     env:
-      build_variant: ${{ matrix.build_variant }}
-      targets: ${{ matrix.targets }}
       images_dir: /opt/images
-    strategy:
-      matrix:
-        include:
-          - build_variant: "mt7621"
-            targets: "K2P"
+    
     steps:
-      - uses: actions/checkout@v2
-      - name: Prepare environment
+      # ===============================================
+      # 步驟 1: 基礎環境準備
+      # ===============================================
+      - uses: actions/checkout@v3
+
+      - name: 🚀 Prepare Environment (Merged)
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
-          sudo apt update
-          # 🚨 關鍵修復: 新增 libltdl-dev 解決 ipset/libtoolize 的 ltdl.m4 缺失錯誤
-          sudo apt install autoconf automake libtool pkg-config libtool-bin libltdl-dev gperf python3-docutils autopoint gettext
-      - name: Run shellcheck
-        run: sh ./trunk/tools/shellcheck.sh
-      - name: Prepare toolchain
+          sudo apt-get update
+          # 🚨 Script 1 關鍵修復: libltdl-dev (解決 ipset 錯誤)
+          # 同時加入 Script 2 需要的 jq, ccache, 7zip
+          sudo apt-get install -y --no-install-recommends \
+            unzip cpio 7zip p7zip-full curl wget git \
+            build-essential fakeroot flex bison gawk gperf \
+            autotools-dev autoconf automake libtool-bin libltdl-dev \
+            python3-docutils autopoint gettext texinfo help2man \
+            zlib1g-dev liblzma-dev liblzo2-dev \
+            libgmp3-dev libmpc-dev libmpfr-dev \
+            libncurses5-dev xxd nano cmake pkg-config ccache jq
+
+          echo "BUILD_TIME=$(TZ='Asia/Taipei' date +%Y%m%d-%H%M)" >> $GITHUB_ENV
+          mkdir -p ${{ env.images_dir }}
+
+      - name: 💾 Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ inputs.target_select }}-${{ inputs.toolchain_select }}
+
+      # ===============================================
+      # 步驟 2: 工具鏈準備 (根據您的要求修改)
+      # ===============================================
+      - name: ⬇️ Prepare Toolchain
         run: |
           cd toolchain-mipsel
-          sh dl_toolchain.sh
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.debug_enabled == 'yes' }}
-        with:
-          limit-access-to-actor: true
-      - name: Start build (Ultimate Fix: olddefconfig)
+          
+          # 判斷選擇
+          if [[ "${{ inputs.toolchain_select }}" == *"Native"* ]]; then
+            echo ">>> Using Script 1 Native Method: dl_toolchain.sh"
+            sh dl_toolchain.sh
+          else
+            # 處理 hanwckf 版本下載
+            case "${{ inputs.toolchain_select }}" in
+              "hanwckf v1.1 (gcc 7.4.0, uclibc 1.0.32, SO_REUSEPORT)")
+                URL="https://github.com/hanwckf/padavan-toolchain/releases/download/v1.1/mipsel-linux-uclibc.tar.xz"
+                ;;
+              "hanwckf v1.0 (gcc 7.4.0, uclibc 1.0.32)")
+                URL="https://github.com/hanwckf/padavan-toolchain/releases/download/v1.0/mipsel-linux-uclibc.tar.xz"
+                ;;
+            esac
+            
+            echo ">>> Downloading Toolchain: $URL"
+            curl -O -L "$URL"
+            
+            # 清理舊目錄
+            # 說明：dl_toolchain.sh 通常會解壓出 toolchain-3.4.x
+            # 為了相容性，我們手動解壓並確保路徑正確
+            rm -rf toolchain-3.4.x
+            mkdir -p toolchain-3.4.x
+            tar -xf "$(basename $URL)" -C toolchain-3.4.x --strip-components=1
+            
+            # 建立 toolchain-4.4.x 的連結以防萬一
+            sudo rm -rf ../toolchain-4.4.x
+            sudo ln -s $(pwd)/toolchain-3.4.x ../toolchain-4.4.x
+            echo ">>> Toolchain setup complete."
+          fi
+
+      # ===============================================
+      # 步驟 3: 配置修改 (JSON + Nano + Config)
+      # ===============================================
+      - name: ⚙️ Export Customization (JSON)
+        run: |
+          echo '${{ inputs.customization }}' | jq -r 'to_entries[] | "\(.key)=\(.value)"' | while IFS='=' read -r k v; do
+            echo "${k^^}=$v" >> $GITHUB_ENV
+          done
+
+      - name: 📝 Modify Config & Apply Nano
+        env:
+          TNAME: ${{ inputs.target_select }}
+          NANO_OPT: ${{ inputs.nanoversion }}
+        run: |
+          TEMPLATE_DIR="trunk/configs/templates"
+          # 處理機型名稱 (例如 K2P -> K2P.config)
+          PATTERN_A=$(echo "$TNAME" | sed 's/-/_/g')
+          PATTERN_B=$(echo "$TNAME")
+          TARGET_FILE=$(find "$TEMPLATE_DIR" -maxdepth 1 \( -iname "${PATTERN_A}.config" -o -iname "${PATTERN_B}.config" \) | head -n 1)
+
+          if [ -z "$TARGET_FILE" ]; then
+             echo "::error:: ❌ Config file not found for $TNAME"
+             exit 1
+          fi
+          
+          echo ">>> Using Config: $TARGET_FILE"
+
+          # 如果開啟 Nano，直接修改 Template 檔案
+          if [ "$NANO_OPT" = "true" ]; then
+            echo ">>> 🚨 Applying Nano Optimization..."
+            for fs in ANTFS FAT EXFAT EXT2 EXT3 EXT4 XFS FUSE SWAP; do
+              sed -i "s/CONFIG_FIRMWARE_ENABLE_${fs}=y/CONFIG_FIRMWARE_ENABLE_${fs}=n/gi" "$TARGET_FILE"
+            done
+            modules=(UVC HID SERIAL AUDIO XFRM IMQ IFB NFSD NFSC CIFS NTFS_3G LPRD U2EC HDPARM PARTED SMBD WINS SMBD_SYSLOG FTPD RPL2TP EAP_PEAP DROPBEAR DROPBEAR_FAST_CODE OPENVPN SSWAN XUPNPD MINIDLNA FIREFLY FFMPEG_NEW TRANSMISSION TRANSMISSION_WEB_CONTROL ARIA QOS ARIA_WEB_CONTROL SCUTCLIENT GDUT_DRCOM DOGCOM MINIEAP NJIT_CLIENT SOFTETHERVPN_SERVER SOFTETHERVPN_CLIENT SOFTETHERVPN_CMD VLMCSD TTYD MSD_LITE LRZSZ HTOP NANO IPERF3 DUMP1090 RTL_SDR MTR SOCAT SRELAY MENTOHUST FRPC FRPS REDSOCKS SHADOWSOCKS XRAY V2RAY TROJAN SSOBFS SINGBOX NAIVEPROXY ADBYBY DNSFORWARDER SMARTDNS ADGUARDHOME ZEROTIER ALIDDNS DDNSTO ALDRIVER SQM WIREGUARD)
+            for mod in "${modules[@]}"; do
+              sed -i "s/CONFIG_FIRMWARE_INCLUDE_${mod}=y/CONFIG_FIRMWARE_INCLUDE_${mod}=n/g" "$TARGET_FILE"
+            done
+          fi
+
+          # 確保核心功能開啟
+          keep_modules=(OPENSSH SFTP TCPDUMP CURL HTTPS OPENSSL_EC OPENSSL_EXE)
+          for kmod in "${keep_modules[@]}"; do
+             sed -i "/CONFIG_FIRMWARE_INCLUDE_${kmod}/d" "$TARGET_FILE"
+             echo "CONFIG_FIRMWARE_INCLUDE_${kmod}=y" >> "$TARGET_FILE"
+          done
+
+      - name: ✏️ Apply Custom Settings to Source
+        run: |
+          if [ -d "trunk/custom/scripts" ]; then
+             chmod +x trunk/custom/scripts/*.sh
+             bash trunk/custom/scripts/setip.sh "${{ env.LANIP }}" trunk/user/shared/defaults.h trunk/user/www/dict/CN.dict || true
+             bash trunk/custom/scripts/setaccount.sh "${{ env.SIGNACCOUNT }}" "${{ env.SIGNPASSWORD }}" trunk/user/shared/defaults.h || true
+             bash trunk/custom/scripts/setwifi.sh "${{ env.WIFI2GSSID }}" "${{ env.WIFI2GPSK }}" "${{ env.WIFI5GSSID }}" "${{ env.WIFI5GPSK }}" trunk/user/shared/defaults.h || true
+          fi
+
+      # ===============================================
+      # 步驟 4: 建置前檢查與修復 (Script 1)
+      # ===============================================
+      - name: 🔍 Run shellcheck
+        run: sh ./trunk/tools/shellcheck.sh || true
+
+      - name: 🔨 Fix mkimage (Safety Check)
+        run: |
+          if [ -f "trunk/tools/mkimage/mkimage.c" ]; then
+             sed -i 's/"%d\.%d"/"%hhd.%hhd"/g' trunk/tools/mkimage/mkimage.c
+             sed -i 's/"%d\.%d%c"/"%hhd.%hhd%c"/g' trunk/tools/mkimage/mkimage.c
+          fi
+
+      # ===============================================
+      # 步驟 5: 開始編譯 (Script 1 核心邏輯)
+      # ===============================================
+      - name: 🏗️ Start Build (Native Script 1 Logic)
+        env:
+          TNAME: ${{ inputs.target_select }}
         run: |
           cd trunk
           
-          # ==========================================================
-          # 💥 最終解決方案：強制複製、使用 olddefconfig 更新配置
-          # ----------------------------------------------------------
-          # 1. 複製您修改過的配置檔到核心目錄
-          cp configs/boards/K2P/kernel-3.4.x-5.0.config linux-3.4.x/.config
-          
-          # 2. **最關鍵修正**：使用 make olddefconfig 確保所有 NEW 選項都被強制採用預設值。
-          #    這個命令被設計為非互動式，應該能解決所有 [N/y/?] (NEW) aborted! 錯誤。
-          make -C linux-3.4.x olddefconfig
-          
-          # 3. 執行清理和編譯 (build_firmware_ci 會開始編譯)
+          # 🚨🚨🚨 Script 1 核心修復：清理 tmp 和 staging 🚨🚨🚨
+          # 這解決了 libxt_limit.so 缺失的問題，必須執行
+          echo ">>> 🧹 Executing Script 1 Fix: Cleaning tmp and staging..."
           rm -rf tmp staging
           
-          mkdir -p ${images_dir}
-          for m in $targets; do fakeroot ./build_firmware_ci $m; \
-          if [ $? = 0 ]; then cp -f images/*.trx ${images_dir}/$m.trx; else exit 1; fi; \
-          ./clear_tree_simple >/dev/null 2>&1; done
-      - name: Create archive
-        if: ${{ github.event_name != 'release' && success() }}
+          # 使用 fakeroot 執行 Script 1 的原生編譯指令
+          echo ">>> 🏗️ Building for target: $TNAME"
+          # build_firmware_ci 會讀取 configs/templates 裡的設定檔
+          fakeroot ./build_firmware_ci $TNAME
+          
+          # 檢查結果
+          if [ $? -eq 0 ]; then
+             echo "✅ Build Success!"
+             cp -f images/*.trx ${{ env.images_dir }}/
+          else
+             echo "::error:: ❌ Build Failed!"
+             exit 1
+          fi
+          
+          # Script 1 的清理步驟
+          ./clear_tree_simple >/dev/null 2>&1
+
+      # ===============================================
+      # 步驟 6: 整理產物與發布
+      # ===============================================
+      - name: 📦 Organize & Rename
         run: |
-          ls -lh ${images_dir}
-          GIT_VERSION=`git rev-parse --short=7 HEAD 2>/dev/null` && [ -n "$GIT_VERSION" ] && \
-          image_name=images_${build_variant}_${GIT_VERSION} || image_name=images_${build_variant}
-          cd ${images_dir}; md5sum *.trx |tee md5sum.txt; 7z a -mx=9 ${image_name}.7z ./*
-          echo "image_name=${image_name}" >> $GITHUB_ENV
-      - name: Upload images to Artifact
-        if: ${{ github.event_name != 'release' && success() }}
+          cd ${{ env.images_dir }}
+          TRX_FILE=$(ls *.trx | head -n 1)
+          if [ ! -z "$TRX_FILE" ]; then
+             # 重新命名：機型_工具鏈_時間.trx
+             # 簡化 Toolchain 名稱顯示
+             TC_NAME="Native"
+             [[ "${{ inputs.toolchain_select }}" == *"v1.1"* ]] && TC_NAME="hanwckf-v1.1"
+             [[ "${{ inputs.toolchain_select }}" == *"v1.0"* ]] && TC_NAME="hanwckf-v1.0"
+             
+             NEW_NAME="${{ inputs.target_select }}_${TC_NAME}_${{ env.BUILD_TIME }}.trx"
+             [ "${{ inputs.nanoversion }}" = "true" ] && NEW_NAME="${{ inputs.target_select }}-NANO_${TC_NAME}_${{ env.BUILD_TIME }}.trx"
+             
+             mv "$TRX_FILE" "$NEW_NAME"
+             echo "ARTIFACT_PATH=${{ env.images_dir }}/$NEW_NAME" >> $GITHUB_ENV
+             md5sum "$NEW_NAME" | tee md5sum.txt
+          fi
+
+      - name: 📤 Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.image_name }}
-          path: ${{ env.images_dir }}/*.7z
-      - name: Upload images to Releases
-        if: ${{ github.event_name == 'release' && success() }}
-        uses: svenstaro/upload-release-action@2.2.0
+          name: Firmware-${{ inputs.target_select }}-${{ env.BUILD_TIME }}
+          path: ${{ env.images_dir }}/*
+
+      - name: 🚀 Publish Release
+        uses: ncipollo/release-action@v1
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.images_dir }}/*.trx
-          tag: ${{ github.ref }}
-          overwrite: true
-          file_glob: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: build-${{ inputs.target_select }}-${{ env.BUILD_TIME }}
+          name: Build ${{ inputs.target_select }} (${{ env.BUILD_TIME }})
+          allowUpdates: true
+          artifacts: ${{ env.images_dir }}/*
+          body: |
+            ## 🚀 Padavan Firmware Build
+            - **Model:** ${{ inputs.target_select }}
+            - **Time:** ${{ env.BUILD_TIME }}
+            - **Mode:** ${{ inputs.nanoversion == 'true' && 'NANO (Slim)' || 'Standard' }}
+            - **Toolchain:** ${{ inputs.toolchain_select }}
+            - **Logic:** Script 1 Native Fix (rm -rf tmp staging)
